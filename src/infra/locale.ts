@@ -62,6 +62,16 @@ export function resolveLocale(baseUrl?: string): Locale {
   return locale;
 }
 
+/** The storefront locale whose origin matches `url`, or undefined for any other host
+ * (e.g. `m.alza.cz` or a test base). Never throws. */
+export function findLocale(url: string): Locale | undefined {
+  try {
+    return LOCALES[new URL(url).origin];
+  } catch {
+    return undefined;
+  }
+}
+
 export function listSupportedLocales(): string[] {
   return Object.keys(LOCALES);
 }

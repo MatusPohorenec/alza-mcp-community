@@ -73,6 +73,8 @@ export function buildServer(opts: BuildOptions = {}): BuildResult {
   // (same-origin /services/restservice.svc routes are JS-challenge-gated for plain fetch).
   const mobileApi = new MobileApi({
     baseUrl: opts.baseUrl,
+    // The catalog storefront decides the `country` the shared webapi hosts answer for.
+    locale: browser.locale,
     browser,
     httpFetch: cfTransport.available ? cfFetch(cfTransport) : undefined,
     fetchImpl: cfTransport.available ? cfFetch(cfTransport) : undefined,
