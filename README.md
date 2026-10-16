@@ -219,7 +219,7 @@ Plus:
 
 - 📦 **Resource** — `alza://product/{code}` lets agents read a product as a URI.
 - 💬 **Prompt** — `/find-product` is a guided shopping helper.
-- 🌍 **Multi-locale** — catalog locale configuration supports `alza.cz`, `.sk`, `.hu`, `.at`, `.de`, `.co.uk` via `ALZA_BASE_URL`. The API calls (`autocomplete`, individual reviews, alternatives, navigation, chatbot, account reads) send that storefront's `country` and `Accept-Language`; `webapi.alza.cz` and `chatbotapi.alza.cz` serve every storefront and pick it from `country` (live-verified for alza.sk 2026-10-12). Account/checkout verification is for CZ only.
+- 🌍 **Multi-locale** — catalog locale configuration supports `alza.cz`, `.sk`, `.hu`, `.at`, `.de`, `.co.uk` via `ALZA_BASE_URL`. The API calls (`autocomplete`, individual reviews, alternatives, navigation, chatbot, account reads) send that storefront's `country` and `Accept-Language`; `webapi.alza.cz` and `chatbotapi.alza.cz` serve every storefront and pick it from `country` (live-verified for alza.sk 2026-10-12). Account/checkout verification is for CZ only, and the account writes (2FA, phone, email, account deletion, watchdogs, basket unlock) keep sending `country=CZ`.
 
 ---
 

@@ -72,6 +72,12 @@ export function findLocale(url: string): Locale | undefined {
   }
 }
 
+/** The primary language tag of an Accept-Language value, e.g. "sk-SK" for
+ * "sk-SK,sk;q=0.9,en;q=0.8" (browser context locale, OAuth `culture`). */
+export function cultureOf(acceptLanguage: string): string {
+  return acceptLanguage.split(",")[0]?.trim() || "cs-CZ";
+}
+
 export function listSupportedLocales(): string[] {
   return Object.keys(LOCALES);
 }

@@ -7,7 +7,7 @@ import type { Page } from "playwright";
 import { AppActionExecutor, type ExecuteAppActionOptions, type FetchLike, type ServerAppAction } from "./app-action.js";
 import { AlzaError, AuthenticationError, ConfigurationError, OutcomeUnknownError, UserError } from "./errors.js";
 import { TransportUnavailableError } from "./impersonate-transport.js";
-import { findLocale, type Locale } from "./locale.js";
+import { cultureOf, findLocale, type Locale } from "./locale.js";
 import { log } from "./logger.js";
 import { proxyConfigured } from "./proxy.js";
 
@@ -82,6 +82,12 @@ interface OidcDiscovery {
 }
 
 const DEFAULT_API_LOCALE = { countryCode: "CZ", acceptLanguage: "cs-CZ,cs;q=0.9,en;q=0.8" };
+
+/** `country` for the account writes (2FA, phone, email, account deletion, watchdog
+ * create/delete, basket unlock). They are live-verified on CZ only, so they keep the
+ * pre-locale value on every storefront until someone verifies them elsewhere;
+ * reads follow the storefront (`MobileApi.country`). */
+const ACCOUNT_WRITE_COUNTRY = "CZ";
 
 export class MobileApi {
   /** Alza host family allowed for server-provided document downloads (OR10).
@@ -264,7 +270,7 @@ export class MobileApi {
       state,
       nonce: base64Url(randomBytes(32)),
       countryCode: process.env.ALZA_COUNTRY ?? this.country,
-      culture: process.env.ALZA_CULTURE ?? this.culture,
+      culture: process.env.ALZA_CULTURE ?? cultureOf(this.acceptLanguage),
     });
     const authorizationEndpoint = discovery.authorization_endpoint ?? "https://identity.alza.cz/connect/authorize";
     const out = { authorizationUrl: `${authorizationEndpoint}?${params}`, state };
@@ -554,11 +560,6 @@ export class MobileApi {
     return executor.execute(action, options);
   }
 
-  /** OAuth `culture` for the sign-in page, e.g. "sk-SK" (first Accept-Language tag). */
-  private get culture(): string {
-    return this.acceptLanguage.split(",")[0]?.trim() || "cs-CZ";
-  }
-
   private mobileHeaders(input?: Headers | Record<string, string> | Array<[string, string]>): Headers {
     const headers = new Headers(input);
     headers.set("accept", headers.get("accept") ?? "application/json");
@@ -776,7 +777,7 @@ export class MobileApi {
   async updateBasket(basketId: number, flag: boolean, isDelayedPayment = false): Promise<unknown> {
     return this.request(`/services/restservice.svc/v2/updBasket/${encodeURIComponent(basketId)}/${flag ? 1 : 0}?isDelayedPayment=${isDelayedPayment ? "true" : "false"}`);
   }
-  async unlockBasket(country = this.country): Promise<unknown> {
+  async unlockBasket(country = ACCOUNT_WRITE_COUNTRY): Promise<unknown> {
     // Live correction (2026-09-09): GET (POST → 405) and requestModel.Country is required.
     return this.request(`/services/restservice.svc/v1/unlockbasket?country=${encodeURIComponent(country)}`);
   }
@@ -979,7 +980,7 @@ export class MobileApi {
    * probe, `userAccount2FaInfo` changeAction): `PATCH /api/users/{id}/v1/account?country=CZ`
    * with the JSON-Patch-shaped body `{op:"replace", path:"/2faEnabled", value:<bool>}`. */
   async setTwoFactor(userId: string, enabled: boolean): Promise<unknown> {
-    return this.request(`https://www.alza.cz/api/users/${encodeURIComponent(userId)}/v1/account?country=${this.country}`, {
+    return this.request(`https://www.alza.cz/api/users/${encodeURIComponent(userId)}/v1/account?country=${ACCOUNT_WRITE_COUNTRY}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ op: "replace", path: "/2faEnabled", value: enabled }),
@@ -990,7 +991,7 @@ export class MobileApi {
    * (`userAccountChangePhoneDialog` form): `PATCH /api/users/{id}/v1/account?country=CZ`
    * with `{op:"replace", path:"/phone", value:<phone>}`. */
   async changePhone(userId: string, phone: string): Promise<unknown> {
-    return this.request(`https://www.alza.cz/api/users/${encodeURIComponent(userId)}/v1/account?country=${this.country}`, {
+    return this.request(`https://www.alza.cz/api/users/${encodeURIComponent(userId)}/v1/account?country=${ACCOUNT_WRITE_COUNTRY}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ op: "replace", path: "/phone", value: phone }),
@@ -1001,7 +1002,7 @@ export class MobileApi {
    * (`userAccountChangeEmailDialog` form): `PATCH /api/users/{id}/v1/account?country=CZ`
    * with `{op:"replace", path:"/email", value:<email>}`. */
   async changeEmail(userId: string, email: string): Promise<unknown> {
-    return this.request(`https://www.alza.cz/api/users/${encodeURIComponent(userId)}/v1/account?country=${this.country}`, {
+    return this.request(`https://www.alza.cz/api/users/${encodeURIComponent(userId)}/v1/account?country=${ACCOUNT_WRITE_COUNTRY}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ op: "replace", path: "/email", value: email }),
@@ -1011,9 +1012,10 @@ export class MobileApi {
   /** A18 (2026-09-22): delete the account (irreversible). Live route
    * (`personalDetails.deleteAccountAction` → `deleteValidations` →
    * `deleteUserAccountAction`): `DELETE /api/users/{id}/v1/account?country=cz`
-   * with `{acknowledgeAndDelete:true}`. */
+   * with `{acknowledgeAndDelete:true}`. The country is lower-case on purpose:
+   * that is what the live action sends, unlike the other account routes. */
   async deleteAccount(userId: string): Promise<unknown> {
-    return this.request(`https://www.alza.cz/api/users/${encodeURIComponent(userId)}/v1/account?country=${this.country.toLowerCase()}`, {
+    return this.request(`https://www.alza.cz/api/users/${encodeURIComponent(userId)}/v1/account?country=${ACCOUNT_WRITE_COUNTRY.toLowerCase()}`, {
       method: "DELETE",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ acknowledgeAndDelete: true }),
@@ -1044,7 +1046,7 @@ export class MobileApi {
    * target. 200 with `{watchdogId, commodityId, isTrackingStock, price, created,
    * actions:{delete, update}}` (the response also echoes the email). */
   async watchdogCreate(userId: string, payload: { commodityId: number; email: string; isTrackingStock: boolean; price: number | null }): Promise<unknown> {
-    return this.request(`https://webapi.alza.cz/api/watchdog/v1?country=${this.country}&commodityClientId=${encodeURIComponent(userId)}`, {
+    return this.request(`https://webapi.alza.cz/api/watchdog/v1?country=${ACCOUNT_WRITE_COUNTRY}&commodityClientId=${encodeURIComponent(userId)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
@@ -1054,7 +1056,7 @@ export class MobileApi {
   /** B9b (live-verified 2026-10-06): delete a watchdog — the dialog's
    * `deleteAction` target. 2xx with an empty body. */
   async watchdogDelete(userId: string, watchdogId: string): Promise<unknown> {
-    return this.request(`https://webapi.alza.cz/api/watchdog/v1/${encodeURIComponent(watchdogId)}?country=${this.country}&commodityClientId=${encodeURIComponent(userId)}`, {
+    return this.request(`https://webapi.alza.cz/api/watchdog/v1/${encodeURIComponent(watchdogId)}?country=${ACCOUNT_WRITE_COUNTRY}&commodityClientId=${encodeURIComponent(userId)}`, {
       method: "DELETE",
     });
   }

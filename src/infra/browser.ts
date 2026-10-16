@@ -3,7 +3,7 @@ import { proxyFromEnv } from "./proxy.js";
 import { createRequire } from "node:module";
 import { chromium, type Browser, type BrowserContext, type Page, type Response } from "playwright";
 import { CloudflareChallengeError, UpstreamError } from "./errors.js";
-import { resolveLocale, type Locale } from "./locale.js";
+import { cultureOf, resolveLocale, type Locale } from "./locale.js";
 import { log } from "./logger.js";
 
 const require = createRequire(import.meta.url);
@@ -206,7 +206,7 @@ export class AlzaBrowser {
     const generation = this.contextGeneration;
     const browser = await this.ensureBrowser();
     const context = await browser.newContext({
-      locale: this.locale.acceptLanguage.split(",")[0] ?? "cs-CZ",
+      locale: cultureOf(this.locale.acceptLanguage),
       userAgent: HEADER_USER_AGENT,
       viewport: { width: 1366, height: 900 },
       extraHTTPHeaders: { "accept-language": this.locale.acceptLanguage },

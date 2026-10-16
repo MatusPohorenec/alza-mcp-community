@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { ImpersonateTransport } from "../src/infra/impersonate-transport.js";
 import { MobileApi } from "../src/infra/mobile-api.js";
+import { buildServer } from "../src/server.js";
 import { MobileAccount } from "../src/domain/mobile-account.js";
 import { findLocale, resolveLocale } from "../src/infra/locale.js";
 
@@ -22,6 +26,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.ALZA_COUNTRY;
   delete process.env.ALZA_CULTURE;
+  delete process.env.ALZA_BASE_URL;
 });
 
 describe("findLocale", () => {
@@ -92,5 +97,41 @@ describe("MobileApi storefront locale", () => {
     const overridden = new URL((await api.startOAuth()).authorizationUrl);
     expect(overridden.searchParams.get("countryCode")).toBe("CZ");
     expect(overridden.searchParams.get("culture")).toBe("cs-CZ");
+  });
+
+  it("keeps the CZ country on account writes, which are verified on CZ only", async () => {
+    const seen = stubFetch();
+    const api = new MobileApi({ visitorId: "v", baseUrl: "https://test.alza.invalid", locale: sk });
+    await api.setTwoFactor("123", true);
+    await api.changePhone("123", "+420123456789");
+    await api.changeEmail("123", "a@example.invalid");
+    await api.deleteAccount("123");
+    await api.watchdogCreate("123", { commodityId: 1, email: "a@example.invalid", isTrackingStock: true, price: null });
+    await api.watchdogDelete("123", "w1");
+    await api.unlockBasket();
+    expect(seen.map((s) => new URL(s.url).searchParams.get("country"))).toEqual(["CZ", "CZ", "CZ", "cz", "CZ", "CZ", "CZ"]);
+  });
+});
+
+describe("buildServer storefront wiring", () => {
+  it("sends the ALZA_BASE_URL storefront's country from the MCP tools", async () => {
+    // Set only in the environment, as the CLI does: the browser picks it up, and the
+    // MobileApi must get it from the browser (its own base would default to alza.cz).
+    process.env.ALZA_BASE_URL = "https://www.alza.sk";
+    const seen = stubFetch();
+    const built = buildServer({ cfTransport: new ImpersonateTransport({ enabled: false }) });
+    const [s, c] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "locale-wiring", version: "0" });
+    try {
+      await built.server.connect(s);
+      await client.connect(c);
+      await client.callTool({ name: "autocomplete", arguments: { query: "macbook" } });
+      const whisper = seen.find((r) => r.url.includes("/whisperer/"));
+      expect(whisper && new URL(whisper.url).searchParams.get("country")).toBe("SK");
+      expect(whisper?.acceptLanguage).toMatch(/^sk-SK/);
+    } finally {
+      await client.close();
+      await built.close();
+    }
   });
 });
