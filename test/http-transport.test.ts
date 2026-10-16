@@ -142,14 +142,18 @@ describe("Streamable HTTP transport (default: catalog only)", () => {
     expect(health.status).toBe(200);
     expect(JSON.parse(health.body)).toMatchObject({ ok: true, transport: "streamable-http", account: false });
     expect(server.sessionCount()).toBe(0);
+  });
 
-    // Initial request exceeding body limit is rejected with 413
+  it("rejects an oversized initialize request with 413", async () => {
+    const server = await start();
+    const headers = { "content-type": "application/json", accept: "application/json, text/event-stream" };
     const oversized = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { pad: "x".repeat(4 * 1024 * 1024 + 100) } });
     const tooLargeInit = await rawRequest(server.port, { method: "POST", path: "/mcp", headers, body: oversized });
     expect(tooLargeInit.status).toBe(413);
+    expect(server.sessionCount()).toBe(0);
   });
 
-  it("enforces body size limit on existing-session requests", async () => {
+  it("enforces the body size limit on existing-session requests", async () => {
     const server = await start();
     const client = await connect(server);
     const sessionId = (client.transport as StreamableHTTPClientTransport).sessionId;
@@ -166,12 +170,28 @@ describe("Streamable HTTP transport (default: catalog only)", () => {
       method: "tools/list",
       params: { pad: "x".repeat(4 * 1024 * 1024 + 100) },
     });
-    const res = await rawRequest(server.port, { method: "POST", path: "/mcp", headers, body: oversized });
-    expect(res.status).toBe(413);
-    expect(JSON.parse(res.body)).toMatchObject({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: expect.stringMatching(/request body too large/i) },
+    const tooLarge = { jsonrpc: "2.0", error: { code: -32000, message: expect.stringMatching(/request body too large/i) } };
+    // With Content-Length (Node sets it for a single end(body)) and chunked: both are
+    // refused once the bytes read pass the limit.
+    const declared = await rawRequest(server.port, { method: "POST", path: "/mcp", headers, body: oversized });
+    expect(declared.status).toBe(413);
+    expect(JSON.parse(declared.body)).toMatchObject(tooLarge);
+    const chunked = await rawRequest(server.port, { method: "POST", path: "/mcp", headers: { ...headers, "transfer-encoding": "chunked" }, body: oversized });
+    expect(chunked.status).toBe(413);
+    expect(JSON.parse(chunked.body)).toMatchObject(tooLarge);
+  });
+
+  it("leaves a non-JSON session POST to the SDK (415)", async () => {
+    const server = await start();
+    const client = await connect(server);
+    const sessionId = (client.transport as StreamableHTTPClientTransport).sessionId!;
+    const res = await rawRequest(server.port, {
+      method: "POST",
+      path: "/mcp",
+      headers: { "content-type": "text/plain", accept: "application/json, text/event-stream", "mcp-session-id": sessionId },
+      body: "hello",
     });
+    expect(res.status).toBe(415);
   });
 
   it("enforces the session cap and releases a session on DELETE", async () => {
