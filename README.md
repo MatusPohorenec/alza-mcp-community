@@ -209,7 +209,7 @@ Mobile API environment variables:
 | `ALZA_VISITOR_ID` | Optional anonymous visitor UUID; otherwise generated per process |
 | `ALZA_OAUTH_CLIENT_ID` | OAuth client id used by `auth_start`, `auth_exchange` and token refresh, default `alza_Android`. Change it only together with `ALZA_OAUTH_CLIENT_SECRET` |
 | `ALZA_OAUTH_REDIRECT_URI` | OAuth redirect URI, default `alza://identity` |
-| `ALZA_COUNTRY` / `ALZA_CULTURE` | `countryCode` / `culture` sent on the OAuth authorize URL, defaults `CZ` / `cs-CZ` |
+| `ALZA_COUNTRY` / `ALZA_CULTURE` | `countryCode` / `culture` sent on the OAuth authorize URL, default: the `ALZA_BASE_URL` storefront's (`CZ` / `cs-CZ` for alza.cz, `SK` / `sk-SK` for alza.sk) |
 | `ALZA_OAUTH_AUTHORITY` | OAuth authority, default `https://identity.alza.cz` |
 | `ALZA_OAUTH_CLIENT_SECRET` | The `alza_Android` OAuth client is confidential — token requests need its APK-embedded secret (default: the source-verified value; set `""` to omit it for public clients). Used by `auth_exchange` and token refresh |
 | `ALZA_CLIENT_SECRET` | Same secret for the PKCE exchange scripts (`scripts/e2e-order-payment.browser.mjs exchange`, `scripts/alza-auth-exchange.mjs`) |
@@ -219,7 +219,7 @@ Plus:
 
 - 📦 **Resource** — `alza://product/{code}` lets agents read a product as a URI.
 - 💬 **Prompt** — `/find-product` is a guided shopping helper.
-- 🌍 **Multi-locale** — catalog locale configuration supports `alza.cz`, `.sk`, `.hu`, `.at`, `.de`, `.co.uk` via `ALZA_BASE_URL`; account/checkout verification is for CZ and some routes are fixed to the CZ host.
+- 🌍 **Multi-locale** — catalog locale configuration supports `alza.cz`, `.sk`, `.hu`, `.at`, `.de`, `.co.uk` via `ALZA_BASE_URL`. The API calls (`autocomplete`, individual reviews, alternatives, navigation, chatbot, account reads) send that storefront's `country` and `Accept-Language`; `webapi.alza.cz` and `chatbotapi.alza.cz` serve every storefront and pick it from `country` (live-verified for alza.sk 2026-10-12). Account/checkout verification is for CZ only, and the account writes (2FA, phone, email, account deletion, watchdogs, basket unlock) keep sending `country=CZ`.
 
 ---
 

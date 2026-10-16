@@ -702,7 +702,7 @@ export class MobileAccount {
    * visitor-keyed (no account state) — the send is a conversational write,
    * token-free like web_add_to_cart. */
   async chatNavigation(country?: string): Promise<unknown> {
-    const c = country === undefined ? "CZ" : String(country);
+    const c = country === undefined ? this.api.country : String(country);
     if (!/^[A-Za-z]{2}$/.test(c)) throw new UserError("country must be a 2-letter code (e.g. CZ)");
     return this.api.chatNavigation(c.toUpperCase());
   }
@@ -710,7 +710,7 @@ export class MobileAccount {
   async chatSend(payload: Record<string, unknown>): Promise<unknown> {
     const pageType = requireInt(payload, "page_type");
     if (pageType < 1 || pageType > 30) throw new UserError("page_type must be 1-30 (1=product detail, 5=Order1, 6=Order2, 24=Order4 per the W18 capture)");
-    const country = payload.country === undefined ? "CZ" : String(payload.country);
+    const country = payload.country === undefined ? this.api.country : String(payload.country);
     if (!/^[A-Za-z]{2}$/.test(country)) throw new UserError("country must be a 2-letter code (e.g. CZ)");
     const opt = (name: string, max: number): string | null => {
       if (payload[name] === undefined || payload[name] === null) return null;

@@ -55,6 +55,8 @@ export interface AppActionExecutorOptions {
   userId?: number;
   authorizationToken?: string;
   userAgent?: string;
+  /** Storefront Accept-Language (default Czech). */
+  acceptLanguage?: string;
   allowedPathPrefixes?: string[];
   fetchImpl?: FetchLike;
 }
@@ -286,7 +288,7 @@ export class AppActionExecutor {
   }
 
   private headers(multipart: boolean): Headers {
-    const headers = new Headers({ accept: "application/json", "user-agent": this.options.userAgent ?? "ktor-client", "accept-language": "cs-CZ,cs;q=0.9,en;q=0.8", "Balancer-Guid": this.options.visitorId });
+    const headers = new Headers({ accept: "application/json", "user-agent": this.options.userAgent ?? "ktor-client", "accept-language": this.options.acceptLanguage ?? "cs-CZ,cs;q=0.9,en;q=0.8", "Balancer-Guid": this.options.visitorId });
     if (!multipart) headers.set("content-type", "application/json");
     if (this.options.authorizationToken) headers.set("authorization", `Bearer ${this.options.authorizationToken}`);
     return headers;

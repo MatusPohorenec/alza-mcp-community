@@ -428,10 +428,10 @@ export function createAccountTools(deps: ToolDeps): RegisterableTool[] {
           description:
             "Read the live chatbotapi.alza.cz navigation for the current visitor (row W18): chatbotInitializeChatAction / chatbotReinitializeChatAction / metadata / rating actions with their server-provided hrefs and parameters. " +
             "Use when inspecting what Alza's live chatbot offers for a page, or before `chat_send` to discover the current actions. " +
-            "The `country` query field is required by the server (defaults to CZ). " +
+            "The `country` query field is required by the server (defaults to the configured storefront, ALZA_BASE_URL). " +
             "Read-only; no token required.",
           inputSchema: {
-            country: z.string().length(2).optional().describe("2-letter country code, e.g. 'CZ'. Defaults to CZ."),
+            country: z.string().length(2).optional().describe("2-letter country code, e.g. 'CZ' or 'SK'. Defaults to the configured storefront (ALZA_BASE_URL)."),
           },
           annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
           outputSchema: OUTPUT_SCHEMAS["chat_navigation"],
@@ -455,7 +455,7 @@ export function createAccountTools(deps: ToolDeps): RegisterableTool[] {
             "Example: `chat_send({page_type: 1, initial_input: 'Is this in stock?'})`.",
           inputSchema: {
             page_type: z.number().int().min(1).max(30).describe("Page context code: 1=product detail, 5=Order1, 6=Order2, 24=Order4 (2026-09-09 capture)."),
-            country: z.string().length(2).optional().describe("2-letter country code, e.g. 'CZ'."),
+            country: z.string().length(2).optional().describe("2-letter country code, e.g. 'CZ' or 'SK'. Defaults to the configured storefront (ALZA_BASE_URL)."),
             referrer: z.string().max(500).optional().describe("Referrer URL for the chat context, if known."),
             initial_input: z.string().max(2000).optional().describe("The user's first message text (initialInput)."),
             force_initialize: z.boolean().optional().describe("Force a fresh chat initialization instead of reusing the session."),
