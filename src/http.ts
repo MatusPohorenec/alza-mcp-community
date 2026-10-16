@@ -119,6 +119,16 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+/** Every Content-Type header value as sent. Node's `req.headers` keeps only the first
+ * duplicate, while the SDK's Web `Headers` (built from rawHeaders) joins them all. */
+function contentTypeValues(req: IncomingMessage): string[] {
+  const values: string[] = [];
+  for (let i = 0; i < req.rawHeaders.length; i += 2) {
+    if (req.rawHeaders[i]?.toLowerCase() === "content-type") values.push(req.rawHeaders[i + 1] ?? "");
+  }
+  return values;
+}
+
 /** Read the JSON body within MAX_BODY_BYTES, or answer 413/400 and return null. */
 async function readJsonBodyOrReply(req: IncomingMessage, res: ServerResponse): Promise<{ body: unknown } | null> {
   try {
@@ -228,11 +238,17 @@ export async function startHttpServer(opts: HttpServerOptions = {}): Promise<Run
       });
       // The SDK reads a POST body without a size limit, so read JSON bodies here.
       // Anything else is left unread: the SDK answers it with 415 before reading.
+      // That split is only safe while both sides see the same Content-Type, so a
+      // repeated header (Node keeps the first, the SDK joins them) is refused.
       let body: unknown;
-      if (req.method === "POST" && req.headers["content-type"]?.includes("application/json")) {
-        const read = await readJsonBodyOrReply(req, res);
-        if (!read) return;
-        body = read.body;
+      if (req.method === "POST") {
+        const contentTypes = contentTypeValues(req);
+        if (contentTypes.length > 1) return jsonRpcError(res, 400, "Duplicate Content-Type header");
+        if (contentTypes[0]?.includes("application/json")) {
+          const read = await readJsonBodyOrReply(req, res);
+          if (!read) return;
+          body = read.body;
+        }
       }
       await s.transport.handleRequest(req, res, body);
       return;
