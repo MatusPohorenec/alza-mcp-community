@@ -50,9 +50,13 @@ if (!skipVenv && process.platform === "win32") {
   if (fs.existsSync(cli)) {
     log("setting up the Chrome-fingerprint transport venv (curl_cffi) …");
     const venv = spawnSync(process.execPath, [cli, "--setup-cf"], { stdio: "inherit" });
-    if (venv.status !== 0) {
+    if (venv.error) {
+      log("cf-venv setup skipped (" + venv.error.message + "); the server will fall back to the browser transport.");
+    } else if (venv.status !== 0) {
       log("cf-venv setup exited with code " + venv.status + "; the server will fall back to the browser transport.");
     }
+  } else {
+    log("cf-venv setup skipped (dist/index.js not built); run `alza-mcp-community --setup-cf` after building.");
   }
 } else if (!skipVenv && fs.existsSync(ensureVenv)) {
   log("setting up the Chrome-fingerprint transport venv (curl_cffi) …");
